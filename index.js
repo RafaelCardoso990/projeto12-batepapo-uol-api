@@ -1,7 +1,7 @@
 import express, {json} from 'express'
 import chalk from 'chalk';
 import cors from 'cors'
-import Joi from 'joi';
+import joi from 'joi';
 import { MongoClient } from 'mongodb';
 import dayjs from 'dayjs'
 import dotenv from 'dotenv'
@@ -20,16 +20,16 @@ let database;
 
 let lastStatus = Date.now();
 
-const schemaMessage = Joi.object({
-    to: Joi.string().min(1).required(),
-    text: Joi.string().min(1).required(),
-    type: Joi.string().valid("message", "private_message").required(),
-    from: Joi.string().min(1).required()
+const schemaMessage = joi.object({
+    to: joi.string().min(1).required(),
+    text: joi.string().min(1).required(),
+    type: joi.string().valid("message", "private_message").required(),
+    from: joi.string().min(1).required()
 });
 
-const schemaParticipant = Joi.object({
-    name: Joi.string().required(),
-    lastStatus: Joi.number().integer().required()
+const schemaParticipant = joi.object({
+    name: joi.string().required(),
+    lastStatus: joi.number().integer().required()
 });
 
 app.post("/participants", async (req, res) => {
@@ -214,11 +214,21 @@ setInterval(async () => {
                 return participant;
             }
         })
-        console.log(filteredParticipants)
+        
+
         if (filteredParticipants.length > 0) {
+
             filteredParticipants.map(participant => {
+
                 database.collection("participants").deleteOne({ name: participant.name });
-                database.collection("message").insertOne({ from: participant.name, to: 'Todos', text: 'sai da sala...', type: 'status', time: dayjs(lastStatus).format("HH:mm:ss") });
+
+                database.collection("message").insertOne({ 
+                    from: participant.name,
+                    to: 'Todos',
+                    text: 'sai da sala...',
+                    type: 'status',
+                    time: dayjs(lastStatus).format("HH:mm:ss") });
+
                 console.log(`Usuário ${participant.name} retirado da sala por inatividade!`);
             })
         }
@@ -226,6 +236,34 @@ setInterval(async () => {
         console.error(e);
     }
 }, 15000);
+
+app.delete("/messages/:ID_DA_MENSAGEM", async (req,res) => {
+    const {user} = req.headers
+    const id = req.params
+    
+
+    try{
+    await mongoClient.connect()
+    database = mongoClient.db(process.env.banco_mongo);
+    
+    const search = await database.collection("message").findOne({_id: new ObjectId(id)})
+    if(!search){
+        return res.sendStatus(404)
+    }
+    
+    if(search.from !== user){
+        return res.sendStatus(401)
+    }
+    
+    await database.collection("message").deleteOne({_id: new ObjectId(id)})
+    res.sendStatus(200)
+    
+    } catch(e){
+        res.status(422)
+    }
+   
+})
+
 
 
 app.listen(process.env.porta ,() =>{
